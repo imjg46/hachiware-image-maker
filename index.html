@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>하치와레 짤 만들기</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 24px 16px;
+      background: #eef5ff;
+      color: #172033;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    main {
+      max-width: 700px;
+      margin: auto;
+      padding: 22px;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 8px 30px #17203310;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 25px;
+    }
+
+    p {
+      color: #596579;
+      line-height: 1.6;
+    }
+
+    label {
+      display: block;
+      margin-top: 18px;
+      font-weight: 700;
+    }
+
+    textarea {
+      width: 100%;
+      margin-top: 8px;
+      padding: 12px;
+      border: 1px solid #ccd2dc;
+      border-radius: 10px;
+      font: inherit;
+      font-size: 18px;
+      resize: vertical;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      margin-top: 12px;
+      accent-color: #3466ed;
+    }
+
+    canvas, #result {
+      display: block;
+      width: 100%;
+      height: auto;
+      margin-top: 20px;
+      border-radius: 10px;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 20px;
+      padding: 15px;
+      border: 0;
+      border-radius: 12px;
+      background: #3466ed;
+      color: white;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+
+    #status { font-size: 14px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>하치와레 짤 만들기</h1>
+    <p>원하는 문구를 입력하면 이미지에 자동으로 반영됩니다.</p>
+
+    <label for="message">넣을 문구</label>
+    <textarea
+      id="message"
+      rows="2"
+      maxlength="300"
+      placeholder="문구를 입력하세요"
+    >Test message!!!</textarea>
+
+    <label for="size">글씨 크기</label>
+    <input
+      id="size"
+      type="range"
+      min="16"
+      max="80"
+      value="40"
+    >
+
+    <label for="position">글씨 세로 위치</label>
+    <input
+      id="position"
+      type="range"
+      min="0"
+      max="100"
+      value="33"
+    >
+
+    <p id="status" role="status">배경 사진을 불러오는 중입니다.</p>
+
+    <canvas
+      id="canvas"
+      aria-label="이미지 미리보기"
+      hidden
+    ></canvas>
+
+    <button id="save" type="button" disabled>
+      PNG 이미지 만들기 · 다운로드
+    </button>
+
+    <section id="output" hidden>
+      <p>
+        아이폰에서 사진 앱에 저장하려면 아래 이미지를
+        길게 눌러 저장 메뉴를 선택하세요.
+      </p>
+      <img id="result" alt="입력한 문구가 들어간 완성 이미지">
+    </section>
+  </main>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const canvas = $("canvas");
+    const ctx = canvas.getContext("2d");
+    const background = new Image();
+
+    let ready = false;
+
+    // 긴 문구를 이미지 너비에 맞춰 줄바꿈합니다.
+    function wrapText(text, maxWidth) {
+      const lines = [];
+
+      for (const paragraph of text.split("\n")) {
+        let line = "";
+
+        for (const char of Array.from(paragraph)) {
+          if (
+            line &&
+            ctx.measureText(line + char).width > maxWidth
+          ) {
+            lines.push(line);
+            line = char;
+          } else {
+            line += char;
+          }
+        }
+
+        lines.push(line);
+      }
+
+      return lines;
+    }
+
+    function draw() {
+      if (!ready) return;
+
+      const w = canvas.width;
+      const h = canvas.height;
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(background, 0, 0, w, h);
+
+      const scale = w / 660;
+      const margin = 15 * scale;
+
+      let fontSize = Number($("size").value) * scale;
+      let lines;
+      let lineHeight;
+      let outline;
+
+      // 문구가 길면 글씨를 줄여 이미지 안에 맞춥니다.
+      for (let i = 0; i < 100; i++) {
+        ctx.font = `900 ${fontSize}px system-ui, sans-serif`;
+
+        lines = wrapText(
+          $("message").value,
+          w - margin * 2
+        );
+
+        lineHeight = fontSize * 1.25;
+        outline = fontSize * 0.2;
+
+        if (
+          lines.length * lineHeight + outline <= h - margin * 2
+        ) {
+          break;
+        }
+
+        fontSize *= 0.9;
+      }
+
+      const textHeight = lines.length * lineHeight;
+      const topMin = margin + outline / 2;
+
+      const topMax = Math.max(
+        topMin,
+        h - margin - textHeight - outline / 2
+      );
+
+      const requestedTop =
+        h * Number($("position").value) / 100;
+
+      const top = Math.max(
+        topMin,
+        Math.min(requestedTop, topMax)
+      );
+
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.lineJoin = "round";
+      ctx.miterLimit = 2;
+
+      ctx.lineWidth = outline;
+      ctx.strokeStyle = "#ffffff";
+      ctx.fillStyle = "#000000";
+
+      lines.forEach((line, index) => {
+        const y = top + index * lineHeight;
+
+        ctx.strokeText(line, margin, y);
+        ctx.fillText(line, margin, y);
+      });
+
+      // 편집하면 이전 저장 이미지는 숨깁니다.
+      $("output").hidden = true;
+      $("result").removeAttribute("src");
+      $("status").textContent =
+        "문구를 입력하면 미리보기에 반영됩니다.";
+    }
+
+    ["message", "size", "position"].forEach(id => {
+      $(id).addEventListener("input", draw);
+    });
+
+    $("save").addEventListener("click", () => {
+      if (!ready) return;
+
+      try {
+        const url = canvas.toDataURL("image/png");
+
+        $("result").src = url;
+        $("output").hidden = false;
+
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `hachiware-${Date.now()}.png`;
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        $("status").textContent =
+          "이미지를 만들었습니다. 아래 완성 이미지에서도 저장할 수 있습니다.";
+      } catch (error) {
+        $("status").textContent =
+          "저장에 실패했습니다. 사이트를 새로고침한 뒤 다시 시도하세요.";
+      }
+    });
+
+    background.onload = () => {
+      const ratio = Math.min(
+        1,
+        2000 / Math.max(
+          background.naturalWidth,
+          background.naturalHeight
+        )
+      );
+
+      canvas.width = Math.max(
+        1,
+        Math.round(background.naturalWidth * ratio)
+      );
+
+      canvas.height = Math.max(
+        1,
+        Math.round(background.naturalHeight * ratio)
+      );
+
+      ready = true;
+      canvas.hidden = false;
+      $("save").disabled = false;
+      draw();
+    };
+
+    background.onerror = () => {
+      $("status").textContent =
+        "배경 사진을 불러오지 못했습니다. index.html과 같은 폴더에 " +
+        "IMG_0146.jpeg가 있는지 확인하세요. 대소문자도 일치해야 합니다.";
+    };
+
+    // 고정 배경 이미지
+    background.src = "./IMG_0146.jpeg";
+  </script>
+</body>
+</html>
